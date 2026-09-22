@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build binaries
+        run: |
+          mkdir -p dist
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o dist/slack-mcp-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o dist/slack-mcp-darwin-arm64 .
+          GOOS=linux  GOARCH=amd64 go build -ldflags="-s -w" -o dist/slack-mcp-linux-amd64 .
+          GOOS=linux  GOARCH=arm64 go build -ldflags="-s -w" -o dist/slack-mcp-linux-arm64 .
+
+      - name: Create tarballs
+        run: |
+          cd dist
+          for f in slack-mcp-*; do
+            tar czf "${f}.tar.gz" "$f"
+          done
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.tar.gz
+          generate_release_notes: true
+
+      - name: Update Homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA_DARWIN_ARM64=$(shasum -a 256 dist/slack-mcp-darwin-arm64.tar.gz | cut -d' ' -f1)
+          SHA_DARWIN_AMD64=$(shasum -a 256 dist/slack-mcp-darwin-amd64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_AMD64=$(shasum -a 256 dist/slack-mcp-linux-amd64.tar.gz | cut -d' ' -f1)
+          SHA_LINUX_ARM64=$(shasum -a 256 dist/slack-mcp-linux-arm64.tar.gz | cut -d' ' -f1)
+
+          cat > /tmp/slack-mcp.rb <<FORMULA
+          class SlackMcp < Formula
+            desc "Slack MCP server - Model Context Protocol connector for Slack"
+            homepage "https://github.com/akram/go-slack-mcp"
+            version "${VERSION}"
+            license "Apache-2.0"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/akram/go-slack-mcp/releases/download/v${VERSION}/slack-mcp-darwin-arm64.tar.gz"
+                sha256 "${SHA_DARWIN_ARM64}"
+              else
+                url "https://github.com/akram/go-slack-mcp/releases/download/v${VERSION}/slack-mcp-darwin-amd64.tar.gz"
+                sha256 "${SHA_DARWIN_AMD64}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.arm?
+                url "https://github.com/akram/go-slack-mcp/releases/download/v${VERSION}/slack-mcp-linux-arm64.tar.gz"
+                sha256 "${SHA_LINUX_ARM64}"
+              else
+                url "https://github.com/akram/go-slack-mcp/releases/download/v${VERSION}/slack-mcp-linux-amd64.tar.gz"
+                sha256 "${SHA_LINUX_AMD64}"
+              end
+            end
+
+            def install
+              bin.install Dir["slack-mcp-*"].first => "slack-mcp"
+            end
+
+            test do
+              assert_match "SLACK_XOXC_TOKEN", shell_output("#{bin}/slack-mcp 2>&1", 1)
+            end
+          end
+          FORMULA
+
+          cd /tmp
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/akram/homebrew-tap.git"
+          cd homebrew-tap
+          mkdir -p Formula
+          cp /tmp/slack-mcp.rb Formula/slack-mcp.rb
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/slack-mcp.rb
+          git commit -m "Update slack-mcp to ${VERSION}"
+          git push

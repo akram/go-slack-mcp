@@ -4,17 +4,72 @@ A Slack MCP (Model Context Protocol) server written in Go. Drop-in replacement f
 
 ## Why
 
-- Single static binary (12 MB), no Python, no venv, no Docker
+- Single static binary (14 MB), no Python, no venv, no Docker
 - ~5 MB RAM at idle vs ~50 MB for Python
 - Instant startup
+- Built-in token extraction (no separate Playwright/Python setup)
 
-## Setup
+## Install
 
-### Build
+### Homebrew
 
 ```bash
+brew install akram/tap/slack-mcp
+```
+
+### From source
+
+```bash
+go install github.com/akram/go-slack-mcp@latest
+```
+
+### Build locally
+
+```bash
+git clone https://github.com/akram/go-slack-mcp.git
+cd go-slack-mcp
 go build -o slack-mcp .
 ```
+
+## Quick Start
+
+The fastest way to get going:
+
+```bash
+slack-mcp setup
+```
+
+This will:
+1. Open a browser window for you to log in to Slack
+2. Extract your session tokens (xoxc/xoxd) automatically
+3. Prompt for a channel ID to use for MCP server logs
+4. Write a wrapper script and register the MCP server in Claude Code
+
+### Setup Options
+
+```bash
+slack-mcp setup                                    # interactive setup
+slack-mcp setup --refresh-tokens                   # re-extract expired tokens
+slack-mcp setup --set-logs-channel C01234567       # skip channel prompt
+slack-mcp setup --server-name slack-work           # custom MCP server name
+slack-mcp setup --workspace-url https://myteam.slack.com/  # specific workspace
+```
+
+**Prerequisites for setup:** Chrome or Chromium must be installed (used to open Slack and extract session cookies). No additional downloads needed.
+
+### Token Refresh
+
+Slack session tokens expire periodically. When tools start failing with auth errors:
+
+```bash
+slack-mcp setup --refresh-tokens
+```
+
+This re-opens the browser, extracts fresh tokens, and updates the stored credentials. No other reconfiguration needed.
+
+## Manual Configuration
+
+If you prefer to manage tokens yourself:
 
 ### Environment Variables
 
@@ -27,14 +82,14 @@ go build -o slack-mcp .
 | `OUTPUT_FORMAT` | No | `compact` | Message format: `compact` (one-line text) or `json` |
 | `SLACK_MCP_READ_ONLY` | No | `false` | When `true`/`1`/`yes`/`on`, disables write operations |
 
-### Run
+### Run directly
 
 ```bash
 export SLACK_XOXC_TOKEN="xoxc-..."
 export SLACK_XOXD_TOKEN="xoxd-..."
 export LOGS_CHANNEL_ID="C0B8ADGN3L6"
 
-./slack-mcp
+slack-mcp
 ```
 
 ### Claude Code Integration
@@ -56,7 +111,13 @@ Add to your Claude Code MCP settings (`~/.claude/settings.json`):
 }
 ```
 
-Or use a wrapper script that sources tokens from a file (see the Python repo's `setup-slack-mcp.py` for token extraction).
+## Subcommands
+
+| Command | Description |
+|---------|-------------|
+| `slack-mcp` | Start the MCP server (default, stdio mode) |
+| `slack-mcp setup [flags]` | Interactive setup: extract tokens, write config, register in Claude |
+| `slack-mcp version` | Print version |
 
 ## Tools
 
@@ -104,10 +165,6 @@ Or use a wrapper script that sources tokens from a file (see the Python repo's `
 | `refresh_channel_cache` | Reload the channel name-to-ID cache |
 | `refresh_user_cache` | Clear the user handle cache |
 | `clear_usergroup` | Clear all members from a usergroup |
-
-## Token Extraction
-
-The server uses Slack's internal web API with `xoxc`/`xoxd` tokens (the same cookie-based auth that the Slack web client uses). See the [Python slack-mcp setup guide](https://github.com/redhat-community-ai-tools/slack-mcp) for instructions on extracting these tokens from your browser.
 
 ## License
 

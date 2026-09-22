@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -24,10 +25,41 @@ type server struct {
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "setup" {
+		setupCmd := flag.NewFlagSet("setup", flag.ExitOnError)
+		refreshTokens := setupCmd.Bool("refresh-tokens", false, "Re-extract Slack tokens even if they already exist")
+		logsChannel := setupCmd.String("set-logs-channel", "", "Slack channel ID for MCP server log output")
+		serverName := setupCmd.String("server-name", "slack", "MCP server name to register in Claude settings")
+		workspaceURL := setupCmd.String("workspace-url", "", "Slack workspace URL (default: https://app.slack.com/client/)")
+		setupCmd.Parse(os.Args[2:])
+
+		cfg := setupConfig{
+			refreshTokens: *refreshTokens,
+			logsChannel:   *logsChannel,
+			serverName:    *serverName,
+			workspaceURL:  *workspaceURL,
+		}
+		if err := runSetup(cfg); err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	if len(os.Args) > 1 && os.Args[1] == "version" {
+		fmt.Printf("slack-mcp %s\n", version)
+		return
+	}
+
+	runServer()
+}
+
+func runServer() {
 	xoxc := os.Getenv("SLACK_XOXC_TOKEN")
 	xoxd := os.Getenv("SLACK_XOXD_TOKEN")
 	if xoxc == "" || xoxd == "" {
 		fmt.Fprintln(os.Stderr, "Error: SLACK_XOXC_TOKEN and SLACK_XOXD_TOKEN must be set")
+		fmt.Fprintln(os.Stderr, "Run 'slack-mcp setup' to configure tokens interactively.")
 		os.Exit(1)
 	}
 
