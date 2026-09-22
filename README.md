@@ -14,7 +14,8 @@ A Slack MCP (Model Context Protocol) server written in Go. Drop-in replacement f
 ### Homebrew
 
 ```bash
-brew install akram/tap/slack-mcp
+brew tap akram/go-slack-mcp https://github.com/akram/go-slack-mcp
+brew install slack-mcp
 ```
 
 ### From source

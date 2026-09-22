@@ -39,9 +39,7 @@ jobs:
           files: dist/*.tar.gz
           generate_release_notes: true
 
-      - name: Update Homebrew tap
-        env:
-          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+      - name: Update Homebrew formula
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           SHA_DARWIN_ARM64=$(shasum -a 256 dist/slack-mcp-darwin-arm64.tar.gz | cut -d' ' -f1)
@@ -49,7 +47,7 @@ jobs:
           SHA_LINUX_AMD64=$(shasum -a 256 dist/slack-mcp-linux-amd64.tar.gz | cut -d' ' -f1)
           SHA_LINUX_ARM64=$(shasum -a 256 dist/slack-mcp-linux-arm64.tar.gz | cut -d' ' -f1)
 
-          cat > /tmp/slack-mcp.rb <<FORMULA
+          cat > Formula/slack-mcp.rb <<FORMULA
           class SlackMcp < Formula
             desc "Slack MCP server - Model Context Protocol connector for Slack"
             homepage "https://github.com/akram/go-slack-mcp"
@@ -86,13 +84,8 @@ jobs:
           end
           FORMULA
 
-          cd /tmp
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/akram/homebrew-tap.git"
-          cd homebrew-tap
-          mkdir -p Formula
-          cp /tmp/slack-mcp.rb Formula/slack-mcp.rb
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/slack-mcp.rb
-          git commit -m "Update slack-mcp to ${VERSION}"
-          git push
+          git commit -m "formula: update slack-mcp to ${VERSION}"
+          git push origin HEAD:main
